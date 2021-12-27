@@ -1,7 +1,7 @@
 {
   "name": "poolcess",
   "version": "1.0.0",
-  "description": "A Promise Based Child Process Pool",
+  "description": "A Promise Child Process Pool",
   "main": "main/index.js",
   "scripts": {
     "clean": "rimraf dist",
