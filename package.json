@@ -7,8 +7,9 @@
     "clean": "rimraf dist",
     "test": "jest --detectOpenHandles --coverage",
     "copy:assets": "cp './src/worker.js' './dist/worker.js'",
+    "format": "prettier --print-width 80 --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "lint": "eslint \"src/*.ts\" --fix",
-    "build": "rimraf dist && npm run lint && jest && tsc && npm run copy:assets"
+    "build": "rimraf dist && npm run format && npm run lint && jest && tsc && npm run copy:assets"
   },
   "keywords": [
     "fast",

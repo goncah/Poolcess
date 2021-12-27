@@ -2,7 +2,6 @@ import { randomUUID } from 'crypto';
 import { Poolcess, TaskAbortReason } from '../src';
 
 describe('Poolcess Unit Tests', () => {
-
   it('Create a pool with 10 child processes', () => {
     const pool = new Poolcess(10);
     const procCount = pool.getActiveProcessesCount();
@@ -17,10 +16,13 @@ describe('Poolcess Unit Tests', () => {
     context['outputs'] = {};
     context['inputs'].stringA = 'aaa';
     context['inputs'].stringB = 'aaa';
-    const result = await pool.execTask(randomUUID(),
+    const result = await pool.execTask(
+      randomUUID(),
       'if(this.inputs.stringA === this.inputs.stringA) ' +
-      'this.outputs.result = true; else this.outputs.result = false', context,
-      10000);
+        'this.outputs.result = true; else this.outputs.result = false',
+      context,
+      10000,
+    );
     pool.destroy();
     expect(result.outputs.result).toBe(true);
   });
@@ -30,9 +32,12 @@ describe('Poolcess Unit Tests', () => {
     let context = {};
     context['counter'] = 10;
     context['output'] = 0;
-    const result = await pool.execTask(randomUUID(),
-      'for(let i=0;i<this.counter;i++) this.output++', context,
-      10000);
+    const result = await pool.execTask(
+      randomUUID(),
+      'for(let i=0;i<this.counter;i++) this.output++',
+      context,
+      10000,
+    );
     pool.destroy();
     expect(result.output).toBe(10);
   });
@@ -44,11 +49,11 @@ describe('Poolcess Unit Tests', () => {
     context['inputs'].stringA = 'aaa';
     context['inputs'].stringB = 'aaa';
     let out;
-    await pool.execTask(randomUUID(),
-      'console.lo1);', context,
-      4000).catch((err) => out = err);
+    await pool
+      .execTask(randomUUID(), 'console.lo1);', context, 4000)
+      .catch((err) => (out = err));
     pool.destroy();
-    expect(out.error).toBe('Unexpected token \')\'');
+    expect(out.error).toBe("Unexpected token ')'");
   });
 
   it('Execute an infinite loop with 4sec timeout and throw timeout', async () => {
@@ -58,9 +63,9 @@ describe('Poolcess Unit Tests', () => {
     context['inputs'].stringA = 'aaa';
     context['inputs'].stringB = 'aaa';
     let out;
-    await pool.execTask(randomUUID(),
-      'while(1) console.log(1);', context,
-      4000).catch((err) => out = err);
+    await pool
+      .execTask(randomUUID(), 'while(1) console.log(1);', context, 4000)
+      .catch((err) => (out = err));
     pool.destroy();
     expect(out.error).toBe('Timeout.');
   });
@@ -73,9 +78,9 @@ describe('Poolcess Unit Tests', () => {
     const t = setTimeout(async () => {
       await pool.abortTask(taskId, TaskAbortReason.ABORT);
     }, 2500);
-    await pool.execTask(taskId,
-      'while(1) console.log(1);', context,
-      10000).catch((err) => out = err);
+    await pool
+      .execTask(taskId, 'while(1) console.log(1);', context, 10000)
+      .catch((err) => (out = err));
     clearTimeout(t);
     pool.destroy();
     expect(out.error).toBe('User Aborted.');

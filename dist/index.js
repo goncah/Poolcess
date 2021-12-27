@@ -161,7 +161,7 @@ class Poolcess {
     }
     async getProcess() {
         for (const proc of this.processes) {
-            if (!this.checkedInProcesses.has(proc.pid))
+            if (!this.checkedInProcesses.has(proc.pid) && !proc.killed)
                 return proc;
         }
         return undefined;

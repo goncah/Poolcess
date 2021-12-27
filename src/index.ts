@@ -48,14 +48,14 @@ export interface IPoolcess {
 
 export class Poolcess implements IPoolcess {
   private isDestroyed = false;
-  private tasks: Map<string, Task> = new Map();
-  private taskPid: Map<string, number> = new Map();
-  private processes: cp.ChildProcess[] = [];
-  private processCount = 0;
-  private checkedInProcesses: Map<number, null> = new Map();
-  private events: EventEmitter = new EventEmitter();
-  private abortEvents: EventEmitter = new EventEmitter();
-  private taskOutputs: EventEmitter = new EventEmitter();
+  private tasks: Map<string, Task> = new Map(); // Holds tasks to process
+  private taskPid: Map<string, number> = new Map(); // Holds task cp pid
+  private processes: cp.ChildProcess[] = []; // Holds the forked cps
+  private processCount = 0; // Init cp count
+  private checkedInProcesses: Map<number, null> = new Map(); // Holds busy cps
+  private events: EventEmitter = new EventEmitter(); // Emits new task events
+  private abortEvents: EventEmitter = new EventEmitter(); // Emits abort events
+  private taskOutputs: EventEmitter = new EventEmitter(); // Emits task outputs
 
   /**
    *
@@ -72,7 +72,7 @@ export class Poolcess implements IPoolcess {
         if (proc != undefined) {
           this.checkInProcess(proc.pid);
           // Available process
-          // Setup process listener
+          // Setup abort event liteners
           this.abortEvents.once(taskId, (reason) => {
             this.taskPid.delete(taskId);
             this.tasks.delete(taskId);
@@ -88,11 +88,13 @@ export class Poolcess implements IPoolcess {
           this.taskPid.set(taskId, proc.pid);
           proc.send({ id: taskId, task: this.tasks.get(taskId) });
         } else {
+          // No process available, process later on
           this.events.emit('newTask', taskId);
         }
       });
     });
 
+    // Fork the required processes and set message listeners
     if (processCount != undefined) {
       this.processCount = processCount;
       for (let i = 0; i < processCount; i++) {
@@ -200,10 +202,14 @@ export class Poolcess implements IPoolcess {
   public destroy(): void {
     if (this.isDestroyed) throw new Error('Pool is destroyed already.');
     this.isDestroyed = true;
+    // Abort all tasks so their promises get rejected
     for (const taskId of this.tasks.keys()) {
       this.abortEvents.emit(taskId, TaskAbortReason.ABORT);
     }
+    // Kill all cps
     for (const proc of this.processes) if (!proc.killed) proc.kill();
+
+    // Clear
     this.processes = null;
     this.taskPid.clear();
     this.taskPid = null;
@@ -226,7 +232,7 @@ export class Poolcess implements IPoolcess {
    */
   private async getProcess(): Promise<cp.ChildProcess> {
     for (const proc of this.processes) {
-      if (!this.checkedInProcesses.has(proc.pid)) return proc;
+      if (!this.checkedInProcesses.has(proc.pid) && !proc.killed) return proc;
     }
     return undefined;
   }
@@ -251,6 +257,7 @@ export class Poolcess implements IPoolcess {
    * Ensures the required number of processes are available
    */
   private async maintainMinimumProcesses(): Promise<void> {
+    // Filter out any killed cps
     for (const proc of this.processes) {
       if (proc.killed) {
         this.processes = this.processes.filter((item) => {
@@ -260,6 +267,7 @@ export class Poolcess implements IPoolcess {
         });
       }
     }
+    // Fork more cps if needed
     if (this.processes.length < this.processCount) {
       for (let i = this.processes.length; i < this.processCount; i++) {
         const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
