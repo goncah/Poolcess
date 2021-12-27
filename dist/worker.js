@@ -1,22 +1,22 @@
 'use strict';
 /**
- * Poolcess Worker 1.0.0
+ * Poolcess Worker
  *
  * Author
  * Hugo Gonçalves, hfdsgoncalves@gmail.com
  *
  */
-process.on('message', async (task) => {
+process.on('message', async (data) => {
   try {
     const AsyncFunction = Object.getPrototypeOf(
       async () => void {},
     ).constructor;
-    var scriptFn = new AsyncFunction(task.code);
-    scriptFn = scriptFn.bind(task.context);
+    var scriptFn = new AsyncFunction(data.task.code);
+    scriptFn = scriptFn.bind(data.task.context);
     await scriptFn();
-    process.send(task.context);
+    process.send({ id: data.id, context: data.task.context });
   } catch (error) {
-    task.context.error = error.message;
-    process.send(task.context);
+    data.task.context.error = error.message;
+    process.send({ id: data.id, context: data.task.context });
   }
 });

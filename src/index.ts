@@ -62,6 +62,9 @@ export class Poolcess implements IPoolcess {
    * @param processCount Number of processes in the pool
    */
   constructor(processCount?: number) {
+    this.events.setMaxListeners(this.processCount + 1);
+    this.abortEvents.setMaxListeners(this.processCount + 1);
+    this.taskOutputs.setMaxListeners(this.processCount + 1);
     // Setup newTask listener
     this.events.on('newTask', (taskId: string) => {
       if (!this.tasks.has(taskId)) return;
@@ -70,7 +73,7 @@ export class Poolcess implements IPoolcess {
           this.checkInProcess(proc.pid);
           // Available process
           // Setup process listener
-          this.abortEvents.on(taskId, (reason) => {
+          this.abortEvents.once(taskId, (reason) => {
             this.taskPid.delete(taskId);
             this.tasks.delete(taskId);
             if (reason === TaskAbortReason.ABORT) {
@@ -82,14 +85,8 @@ export class Poolcess implements IPoolcess {
             }
             this.maintainMinimumProcesses();
           });
-          proc.on('message', (data) => {
-            this.taskOutputs.emit(taskId, data);
-            this.taskPid.delete(taskId);
-            this.tasks.delete(taskId);
-            this.checkOutProcess(proc.pid);
-          });
           this.taskPid.set(taskId, proc.pid);
-          proc.send(this.tasks.get(taskId));
+          proc.send({ id: taskId, task: this.tasks.get(taskId) });
         } else {
           this.events.emit('newTask', taskId);
         }
@@ -99,15 +96,25 @@ export class Poolcess implements IPoolcess {
     if (processCount != undefined) {
       this.processCount = processCount;
       for (let i = 0; i < processCount; i++) {
-        this.processes.push(
-          cp.fork(__dirname + '/worker.js', [], { silent: true }),
-        );
+        const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+        proc.on('message', (data: any) => {
+          this.taskOutputs.emit(data.id, data.context);
+          this.taskPid.delete(data.id);
+          this.tasks.delete(data.id);
+          this.checkOutProcess(proc.pid);
+        });
+        this.processes.push(proc);
       }
     } else {
       this.processCount = 1;
-      this.processes.push(
-        cp.fork(__dirname + '/worker.js', [], { silent: true }),
-      );
+      const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+      proc.on('message', (data: any) => {
+        this.taskOutputs.emit(data.id, data.context);
+        this.taskPid.delete(data.id);
+        this.tasks.delete(data.id);
+        this.checkOutProcess(proc.pid);
+      });
+      this.processes.push(proc);
     }
   }
 
@@ -228,7 +235,7 @@ export class Poolcess implements IPoolcess {
    * Checks in a Process, making it unavailable for further task processing
    * @param pid Process Id
    */
-  private async checkInProcess(pid: number): Promise<void> {
+  private checkInProcess(pid: number): void {
     this.checkedInProcesses.set(pid, null);
   }
 
@@ -236,7 +243,7 @@ export class Poolcess implements IPoolcess {
    * Checks out a Process, making it available for further task processing
    * @param pid Process Id
    */
-  private async checkOutProcess(pid: number): Promise<void> {
+  private checkOutProcess(pid: number): void {
     if (this.checkedInProcesses.has(pid)) this.checkedInProcesses.delete(pid);
   }
 
@@ -254,10 +261,16 @@ export class Poolcess implements IPoolcess {
       }
     }
     if (this.processes.length < this.processCount) {
-      for (let i = this.processes.length; i < this.processCount; i++)
-        this.processes.push(
-          cp.fork(__dirname + '/worker.js', [], { silent: true }),
-        );
+      for (let i = this.processes.length; i < this.processCount; i++) {
+        const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+        proc.on('message', (data: any) => {
+          this.taskOutputs.emit(data.id, data.context);
+          this.taskPid.delete(data.id);
+          this.tasks.delete(data.id);
+          this.checkOutProcess(proc.pid);
+        });
+        this.processes.push(proc);
+      }
     }
   }
 }

@@ -26,13 +26,16 @@ class Poolcess {
         this.events = new events_1.EventEmitter();
         this.abortEvents = new events_1.EventEmitter();
         this.taskOutputs = new events_1.EventEmitter();
+        this.events.setMaxListeners(this.processCount + 1);
+        this.abortEvents.setMaxListeners(this.processCount + 1);
+        this.taskOutputs.setMaxListeners(this.processCount + 1);
         this.events.on('newTask', (taskId) => {
             if (!this.tasks.has(taskId))
                 return;
             this.getProcess().then((proc) => {
                 if (proc != undefined) {
                     this.checkInProcess(proc.pid);
-                    this.abortEvents.on(taskId, (reason) => {
+                    this.abortEvents.once(taskId, (reason) => {
                         this.taskPid.delete(taskId);
                         this.tasks.delete(taskId);
                         if (reason === TaskAbortReason.ABORT) {
@@ -46,14 +49,8 @@ class Poolcess {
                         }
                         this.maintainMinimumProcesses();
                     });
-                    proc.on('message', (data) => {
-                        this.taskOutputs.emit(taskId, data);
-                        this.taskPid.delete(taskId);
-                        this.tasks.delete(taskId);
-                        this.checkOutProcess(proc.pid);
-                    });
                     this.taskPid.set(taskId, proc.pid);
-                    proc.send(this.tasks.get(taskId));
+                    proc.send({ id: taskId, task: this.tasks.get(taskId) });
                 }
                 else {
                     this.events.emit('newTask', taskId);
@@ -63,12 +60,26 @@ class Poolcess {
         if (processCount != undefined) {
             this.processCount = processCount;
             for (let i = 0; i < processCount; i++) {
-                this.processes.push(cp.fork(__dirname + '/worker.js', [], { silent: true }));
+                const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+                proc.on('message', (data) => {
+                    this.taskOutputs.emit(data.id, data.context);
+                    this.taskPid.delete(data.id);
+                    this.tasks.delete(data.id);
+                    this.checkOutProcess(proc.pid);
+                });
+                this.processes.push(proc);
             }
         }
         else {
             this.processCount = 1;
-            this.processes.push(cp.fork(__dirname + '/worker.js', [], { silent: true }));
+            const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+            proc.on('message', (data) => {
+                this.taskOutputs.emit(data.id, data.context);
+                this.taskPid.delete(data.id);
+                this.tasks.delete(data.id);
+                this.checkOutProcess(proc.pid);
+            });
+            this.processes.push(proc);
         }
     }
     async execTask(taskId, code, context, timeout) {
@@ -155,10 +166,10 @@ class Poolcess {
         }
         return undefined;
     }
-    async checkInProcess(pid) {
+    checkInProcess(pid) {
         this.checkedInProcesses.set(pid, null);
     }
-    async checkOutProcess(pid) {
+    checkOutProcess(pid) {
         if (this.checkedInProcesses.has(pid))
             this.checkedInProcesses.delete(pid);
     }
@@ -173,8 +184,16 @@ class Poolcess {
             }
         }
         if (this.processes.length < this.processCount) {
-            for (let i = this.processes.length; i < this.processCount; i++)
-                this.processes.push(cp.fork(__dirname + '/worker.js', [], { silent: true }));
+            for (let i = this.processes.length; i < this.processCount; i++) {
+                const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
+                proc.on('message', (data) => {
+                    this.taskOutputs.emit(data.id, data.context);
+                    this.taskPid.delete(data.id);
+                    this.tasks.delete(data.id);
+                    this.checkOutProcess(proc.pid);
+                });
+                this.processes.push(proc);
+            }
         }
     }
 }
