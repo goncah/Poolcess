@@ -12,6 +12,7 @@ class Task {
   public code: string;
   public context: Hashmap;
   public timeout: number;
+  public args?: string;
 
   /**
    *
@@ -19,11 +20,32 @@ class Task {
    * @param context Context for the code. These will be serialized and made
    * available to the code.
    * @param timeout The execution timeout
+   * @param args A Map of arguments to pass to the code
    */
-  constructor(code: string, context: Hashmap, timeout: number) {
+  constructor(
+    code: string,
+    context: Hashmap,
+    timeout: number,
+    args?: Map<string, any>,
+  ) {
     this.code = code;
     this.context = context;
     this.timeout = timeout;
+    this.args = JSON.stringify(args, this.replacer);
+  }
+
+  /**
+   * To allow the serialization of Maps
+   */
+  private replacer(key: string, value: any) {
+    if (value instanceof Map) {
+      return {
+        dataType: 'Map',
+        value: Array.from(value.entries()),
+      };
+    } else {
+      return value;
+    }
   }
 }
 
@@ -42,6 +64,7 @@ export interface IPoolcess {
     code: string,
     context: Hashmap,
     timeout: number,
+    ...args: any
   ): Promise<Hashmap>;
   abortTask(taskId: string, code: number): Promise<void>;
 }
@@ -70,7 +93,7 @@ export class Poolcess implements IPoolcess {
       if (!this.tasks.has(taskId)) return;
       this.getProcess().then((proc) => {
         if (proc != undefined) {
-          this.checkInProcess(proc.pid);
+          this.checkInProcess(proc.pid ?? -1);
           // Available process
           // Setup abort event liteners
           this.abortEvents.once(taskId, (reason) => {
@@ -85,7 +108,7 @@ export class Poolcess implements IPoolcess {
             }
             this.maintainMinimumProcesses();
           });
-          this.taskPid.set(taskId, proc.pid);
+          this.taskPid.set(taskId, proc.pid ?? -1);
           proc.send({ id: taskId, task: this.tasks.get(taskId) });
         } else {
           // No process available, process later on
@@ -103,7 +126,7 @@ export class Poolcess implements IPoolcess {
           this.taskOutputs.emit(data.id, data.context);
           this.taskPid.delete(data.id);
           this.tasks.delete(data.id);
-          this.checkOutProcess(proc.pid);
+          this.checkOutProcess(proc.pid ?? -1);
         });
         this.processes.push(proc);
       }
@@ -114,7 +137,7 @@ export class Poolcess implements IPoolcess {
         this.taskOutputs.emit(data.id, data.context);
         this.taskPid.delete(data.id);
         this.tasks.delete(data.id);
-        this.checkOutProcess(proc.pid);
+        this.checkOutProcess(proc.pid ?? -1);
       });
       this.processes.push(proc);
     }
@@ -127,6 +150,7 @@ export class Poolcess implements IPoolcess {
    * @param context Context for the code. These will be serialized and made
    * available to the code.
    * @param timeout The execution timeout
+   * @param args A Map of arguments to pass to the code
    * @returns A Promise that resolves to the Task Id or rejects
    */
   public async execTask(
@@ -134,12 +158,13 @@ export class Poolcess implements IPoolcess {
     code: string,
     context: Hashmap,
     timeout: number,
+    args?: Map<string, any>,
   ): Promise<Hashmap> {
     if (this.isDestroyed) throw new Error('Pool is destroyed.');
-    let timeoutcb;
-    return Promise.race([
+    let timeoutcb: NodeJS.Timeout;
+    return Promise.race<Hashmap>([
       new Promise((resolve, reject) => {
-        this.tasks.set(taskId, new Task(code, context, timeout));
+        this.tasks.set(taskId, new Task(code, context, timeout, args));
         this.taskOutputs.on(taskId, (res) => {
           if (res.error != undefined) {
             clearTimeout(timeoutcb);
@@ -175,7 +200,7 @@ export class Poolcess implements IPoolcess {
       for (const proc of this.processes) {
         if (proc.pid === pid) {
           proc.kill();
-          this.checkOutProcess(proc.pid);
+          this.checkOutProcess(proc.pid ?? -1);
         }
       }
       this.abortEvents.emit(taskId, reason);
@@ -210,19 +235,11 @@ export class Poolcess implements IPoolcess {
     for (const proc of this.processes) if (!proc.killed) proc.kill();
 
     // Clear
-    this.processes = null;
     this.taskPid.clear();
-    this.taskPid = null;
     this.tasks.clear();
-    this.tasks = null;
-    this.processes = null;
-    this.processCount = null;
     this.events.removeAllListeners();
-    this.events = null;
     this.abortEvents.removeAllListeners();
-    this.abortEvents = null;
     this.taskOutputs.removeAllListeners();
-    this.taskOutputs = null;
   }
 
   /**
@@ -230,9 +247,10 @@ export class Poolcess implements IPoolcess {
    * undefined.
    * @returns ChildProcess
    */
-  private async getProcess(): Promise<cp.ChildProcess> {
+  private async getProcess(): Promise<cp.ChildProcess | undefined> {
     for (const proc of this.processes) {
-      if (!this.checkedInProcesses.has(proc.pid) && !proc.killed) return proc;
+      if (!this.checkedInProcesses.has(proc.pid ?? -1) && !proc.killed)
+        return proc;
     }
     return undefined;
   }
@@ -275,7 +293,7 @@ export class Poolcess implements IPoolcess {
           this.taskOutputs.emit(data.id, data.context);
           this.taskPid.delete(data.id);
           this.tasks.delete(data.id);
-          this.checkOutProcess(proc.pid);
+          this.checkOutProcess(proc.pid ?? -1);
         });
         this.processes.push(proc);
       }

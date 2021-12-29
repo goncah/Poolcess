@@ -36,5 +36,6 @@
     "**/_output/**",
     "**/*.min.*",
     "**/*.map"
-  ]
+  ],
+  "jest.jestCommandLine": "jest"
 }

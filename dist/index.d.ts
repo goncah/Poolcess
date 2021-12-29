@@ -6,7 +6,7 @@ export interface Hashmap {
     [key: string]: any;
 }
 export interface IPoolcess {
-    execTask(taskId: string, code: string, context: Hashmap, timeout: number): Promise<Hashmap>;
+    execTask(taskId: string, code: string, context: Hashmap, timeout: number, ...args: any): Promise<Hashmap>;
     abortTask(taskId: string, code: number): Promise<void>;
 }
 export declare class Poolcess implements IPoolcess {
@@ -31,9 +31,10 @@ export declare class Poolcess implements IPoolcess {
      * @param context Context for the code. These will be serialized and made
      * available to the code.
      * @param timeout The execution timeout
+     * @param args A Map of arguments to pass to the code
      * @returns A Promise that resolves to the Task Id or rejects
      */
-    execTask(taskId: string, code: string, context: Hashmap, timeout: number): Promise<Hashmap>;
+    execTask(taskId: string, code: string, context: Hashmap, timeout: number, args?: Map<string, any>): Promise<Hashmap>;
     /**
      * Aborts the given task. Removes the task from the queue or aborts the
      * execution if already started.
