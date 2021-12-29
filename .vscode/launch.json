@@ -20,7 +20,24 @@
       "cwd": "${workspaceRoot}",
       "console": "integratedTerminal",
       "protocol": "inspector",
-      "autoAttachChildProcesses": true,
+      "autoAttachChildProcesses": true
+    },
+    {
+      "type": "node",
+      "name": "vscode-jest-tests",
+      "request": "launch",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "disableOptimisticBPs": true,
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "npm",
+      "args": [
+        "run",
+        "test",
+        "--",
+        "--runInBand",
+        "--watchAll=false"
+      ]
     }
   ]
 }

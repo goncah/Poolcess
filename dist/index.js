@@ -17,11 +17,27 @@ class Task {
      * @param context Context for the code. These will be serialized and made
      * available to the code.
      * @param timeout The execution timeout
+     * @param args A Map of arguments to pass to the code
      */
-    constructor(code, context, timeout) {
+    constructor(code, context, timeout, args) {
         this.code = code;
         this.context = context;
         this.timeout = timeout;
+        this.args = JSON.stringify(args, this.replacer);
+    }
+    /**
+     * To allow the serialization of Maps
+     */
+    replacer(key, value) {
+        if (value instanceof Map) {
+            return {
+                dataType: 'Map',
+                value: Array.from(value.entries()),
+            };
+        }
+        else {
+            return value;
+        }
     }
 }
 var TaskAbortReason;
@@ -52,8 +68,9 @@ class Poolcess {
             if (!this.tasks.has(taskId))
                 return;
             this.getProcess().then((proc) => {
+                var _a, _b;
                 if (proc != undefined) {
-                    this.checkInProcess(proc.pid);
+                    this.checkInProcess((_a = proc.pid) !== null && _a !== void 0 ? _a : -1);
                     // Available process
                     // Setup abort event liteners
                     this.abortEvents.once(taskId, (reason) => {
@@ -70,7 +87,7 @@ class Poolcess {
                         }
                         this.maintainMinimumProcesses();
                     });
-                    this.taskPid.set(taskId, proc.pid);
+                    this.taskPid.set(taskId, (_b = proc.pid) !== null && _b !== void 0 ? _b : -1);
                     proc.send({ id: taskId, task: this.tasks.get(taskId) });
                 }
                 else {
@@ -85,10 +102,11 @@ class Poolcess {
             for (let i = 0; i < processCount; i++) {
                 const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
                 proc.on('message', (data) => {
+                    var _a;
                     this.taskOutputs.emit(data.id, data.context);
                     this.taskPid.delete(data.id);
                     this.tasks.delete(data.id);
-                    this.checkOutProcess(proc.pid);
+                    this.checkOutProcess((_a = proc.pid) !== null && _a !== void 0 ? _a : -1);
                 });
                 this.processes.push(proc);
             }
@@ -97,10 +115,11 @@ class Poolcess {
             this.processCount = 1;
             const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
             proc.on('message', (data) => {
+                var _a;
                 this.taskOutputs.emit(data.id, data.context);
                 this.taskPid.delete(data.id);
                 this.tasks.delete(data.id);
-                this.checkOutProcess(proc.pid);
+                this.checkOutProcess((_a = proc.pid) !== null && _a !== void 0 ? _a : -1);
             });
             this.processes.push(proc);
         }
@@ -112,15 +131,16 @@ class Poolcess {
      * @param context Context for the code. These will be serialized and made
      * available to the code.
      * @param timeout The execution timeout
+     * @param args A Map of arguments to pass to the code
      * @returns A Promise that resolves to the Task Id or rejects
      */
-    async execTask(taskId, code, context, timeout) {
+    async execTask(taskId, code, context, timeout, args) {
         if (this.isDestroyed)
             throw new Error('Pool is destroyed.');
         let timeoutcb;
         return Promise.race([
             new Promise((resolve, reject) => {
-                this.tasks.set(taskId, new Task(code, context, timeout));
+                this.tasks.set(taskId, new Task(code, context, timeout, args));
                 this.taskOutputs.on(taskId, (res) => {
                     if (res.error != undefined) {
                         clearTimeout(timeoutcb);
@@ -147,6 +167,7 @@ class Poolcess {
      * @param reason The reason for aborting the task
      */
     async abortTask(taskId, reason) {
+        var _a;
         if (this.isDestroyed)
             throw new Error('Pool is destroyed.');
         if (this.taskPid.has(taskId)) {
@@ -154,7 +175,7 @@ class Poolcess {
             for (const proc of this.processes) {
                 if (proc.pid === pid) {
                     proc.kill();
-                    this.checkOutProcess(proc.pid);
+                    this.checkOutProcess((_a = proc.pid) !== null && _a !== void 0 ? _a : -1);
                 }
             }
             this.abortEvents.emit(taskId, reason);
@@ -193,19 +214,11 @@ class Poolcess {
             if (!proc.killed)
                 proc.kill();
         // Clear
-        this.processes = null;
         this.taskPid.clear();
-        this.taskPid = null;
         this.tasks.clear();
-        this.tasks = null;
-        this.processes = null;
-        this.processCount = null;
         this.events.removeAllListeners();
-        this.events = null;
         this.abortEvents.removeAllListeners();
-        this.abortEvents = null;
         this.taskOutputs.removeAllListeners();
-        this.taskOutputs = null;
     }
     /**
      * Checks if there is any available process and returns it. Otherwise returns
@@ -213,8 +226,9 @@ class Poolcess {
      * @returns ChildProcess
      */
     async getProcess() {
+        var _a;
         for (const proc of this.processes) {
-            if (!this.checkedInProcesses.has(proc.pid) && !proc.killed)
+            if (!this.checkedInProcesses.has((_a = proc.pid) !== null && _a !== void 0 ? _a : -1) && !proc.killed)
                 return proc;
         }
         return undefined;
@@ -253,10 +267,11 @@ class Poolcess {
             for (let i = this.processes.length; i < this.processCount; i++) {
                 const proc = cp.fork(__dirname + '/worker.js', [], { silent: true });
                 proc.on('message', (data) => {
+                    var _a;
                     this.taskOutputs.emit(data.id, data.context);
                     this.taskPid.delete(data.id);
                     this.tasks.delete(data.id);
-                    this.checkOutProcess(proc.pid);
+                    this.checkOutProcess((_a = proc.pid) !== null && _a !== void 0 ? _a : -1);
                 });
                 this.processes.push(proc);
             }

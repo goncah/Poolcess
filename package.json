@@ -1,6 +1,6 @@
 {
   "name": "poolcess",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "A Promise Child Process Pool",
   "main": "dist/index.js",
   "scripts": {
