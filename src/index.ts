@@ -64,7 +64,7 @@ export interface IPoolcess {
     code: string,
     context: Hashmap,
     timeout: number,
-    ...args: any
+    args?: Map<string, any>,
   ): Promise<Hashmap>;
   abortTask(taskId: string, code: number): Promise<void>;
 }
