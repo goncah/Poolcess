@@ -6,7 +6,7 @@ export interface Hashmap {
     [key: string]: any;
 }
 export interface IPoolcess {
-    execTask(taskId: string, code: string, context: Hashmap, timeout: number, ...args: any): Promise<Hashmap>;
+    execTask(taskId: string, code: string, context: Hashmap, timeout: number, args?: Map<string, any>): Promise<Hashmap>;
     abortTask(taskId: string, code: number): Promise<void>;
 }
 export declare class Poolcess implements IPoolcess {
