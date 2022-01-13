@@ -1,4 +1,4 @@
-name: Poolcess NPM
+name: Poolcess NPM Publish
 
 on:
   release:

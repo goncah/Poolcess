@@ -105,4 +105,3 @@ $ npm run build
 
 ## Next Features
 1. Switch to [EventEmitter2](https://github.com/EventEmitter2/EventEmitter2) to improve overall performance.
-2. Code return values to allow the usage of return in the code while keeping context available for usage.

@@ -22,17 +22,17 @@ process.on('message', async (data) => {
     ).constructor;
     if (data.task.args != undefined) {
       let argMap = JSON.parse(data.task.args, reviver);
-      var args = Array.from(argMap.keys()).map((value) => {
+      let args = Array.from(argMap.keys()).map((value) => {
         return value;
       });
-      var argsContent = Array.from(argMap.values()).map((value) => {
+      let argsContent = Array.from(argMap.values()).map((value) => {
         return value;
       });
-      var scriptFn = new AsyncFunction(...args, data.task.code);
+      let scriptFn = new AsyncFunction(...args, data.task.code);
       scriptFn = scriptFn.bind(data.task.context);
       await scriptFn(...argsContent);
     } else {
-      var scriptFn = new AsyncFunction(data.task.code);
+      let scriptFn = new AsyncFunction(data.task.code);
       scriptFn = scriptFn.bind(data.task.context);
       await scriptFn();
     }

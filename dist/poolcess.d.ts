@@ -1,24 +1,21 @@
 export declare enum TaskAbortReason {
-    ABORT = 2,
-    TIMEOUT = 3
-}
-export interface Hashmap {
-    [key: string]: any;
+    abort = 2,
+    timeout = 3
 }
 export interface IPoolcess {
-    execTask(taskId: string, code: string, context: Hashmap, timeout: number, args?: Map<string, any>): Promise<Hashmap>;
-    abortTask(taskId: string, code: number): Promise<void>;
+    execTask: (taskId: string, code: string, context: Record<string, unknown>, timeout: number, args?: Map<string, unknown>) => Promise<Record<string, unknown>>;
+    abortTask: (taskId: string, code: number) => void;
 }
 export declare class Poolcess implements IPoolcess {
     private isDestroyed;
-    private tasks;
-    private taskPid;
+    private readonly tasks;
+    private readonly taskPid;
     private processes;
-    private processCount;
-    private checkedInProcesses;
-    private events;
-    private abortEvents;
-    private taskOutputs;
+    private readonly processCount;
+    private readonly checkedInProcesses;
+    private readonly events;
+    private readonly abortEvents;
+    private readonly taskOutputs;
     /**
      *
      * @param processCount Number of processes in the pool
@@ -34,14 +31,14 @@ export declare class Poolcess implements IPoolcess {
      * @param args A Map of arguments to pass to the code
      * @returns A Promise that resolves to the Task Id or rejects
      */
-    execTask(taskId: string, code: string, context: Hashmap, timeout: number, args?: Map<string, any>): Promise<Hashmap>;
+    execTask(taskId: string, code: string, context: Record<string, unknown>, timeout: number, args?: Map<string, unknown>): Promise<Record<string, unknown>>;
     /**
      * Aborts the given task. Removes the task from the queue or aborts the
      * execution if already started.
      * @param taskId The task id to abort
      * @param reason The reason for aborting the task
      */
-    abortTask(taskId: string, reason: TaskAbortReason): Promise<void>;
+    abortTask(taskId: string, reason: TaskAbortReason): void;
     /**
      * Counts the number of active processes
      * @returns Number of active processes
