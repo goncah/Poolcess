@@ -66,12 +66,15 @@
     "coverageThreshold": {
       "global": {
         "branches": 60,
-        "functions": 90,
-        "lines": 85,
-        "statements": 85
+        "functions": 60,
+        "lines": 75,
+        "statements": 70
       }
     },
     "coverageDirectory": "../coverage",
     "testEnvironment": "node"
+  },
+  "dependencies": {
+    "eventemitter2": "^6.4.5"
   }
 }

@@ -6,7 +6,7 @@
  * Hugo Gonçalves - hfdsgoncalves@gmail.com
  */
 import { ChildProcess, fork } from 'child_process';
-import { EventEmitter } from 'events';
+import { EventEmitter2, Listener } from 'eventemitter2';
 
 interface DataMap {
   dataType: string;
@@ -84,17 +84,44 @@ export class Poolcess implements IPoolcess {
 
   private readonly checkedInProcesses: Map<number, null> = new Map();
 
-  private readonly events: EventEmitter = new EventEmitter();
+  private readonly events: EventEmitter2 | undefined;
 
-  private readonly abortEvents: EventEmitter = new EventEmitter();
+  private readonly abortEvents: EventEmitter2 | undefined;
 
-  private readonly taskOutputs: EventEmitter = new EventEmitter();
+  private readonly taskOutputs: EventEmitter2 | undefined;
 
   /**
    *
    * @param processCount Number of processes in the pool
    */
   public constructor(processCount?: number) {
+    this.events = new EventEmitter2({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: 1,
+      verboseMemoryLeak: false,
+      ignoreErrors: false,
+    });
+    this.abortEvents = new EventEmitter2({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: processCount != undefined ? processCount * 2 : 2,
+      verboseMemoryLeak: false,
+      ignoreErrors: false,
+    });
+    this.taskOutputs = new EventEmitter2({
+      wildcard: false,
+      delimiter: '.',
+      newListener: false,
+      removeListener: false,
+      maxListeners: processCount != undefined ? processCount * 2 : 2,
+      verboseMemoryLeak: false,
+      ignoreErrors: false,
+    });
     // Setup newTask listener
     this.events.on('newTask', (taskId: string): void => {
       if (!this.tasks.has(taskId)) return;
@@ -103,13 +130,23 @@ export class Poolcess implements IPoolcess {
         this.checkInProcess(PROC.pid ?? -1);
         // Available process
         // Setup abort event liteners
-        this.abortEvents.once(taskId, (reason: TaskAbortReason): void => {
+        this.abortEvents?.once(taskId, (reason: TaskAbortReason): void => {
           this.taskPid.delete(taskId);
           this.tasks.delete(taskId);
           if (reason === TaskAbortReason.abort) {
-            this.taskOutputs.emit(taskId, { error: 'User Aborted.' });
+            this.taskOutputs
+              ?.emitAsync(taskId, { error: 'User Aborted.' })
+              .catch((error: Error): void => {
+                this.destroy();
+                throw error;
+              });
           } else {
-            this.taskOutputs.emit(taskId, { error: 'Timeout.' });
+            this.taskOutputs
+              ?.emitAsync(taskId, { error: 'Timeout.' })
+              .catch((error: Error): void => {
+                this.destroy();
+                throw error;
+              });
           }
           this.maintainMinimumProcesses();
         });
@@ -117,7 +154,12 @@ export class Poolcess implements IPoolcess {
         PROC.send({ id: taskId, task: this.tasks.get(taskId) });
       } else {
         // No process available, process later on
-        this.events.emit('newTask', taskId);
+        this.events
+          ?.emitAsync('newTask', taskId)
+          .catch((error: Error): void => {
+            this.destroy();
+            throw error;
+          });
       }
     });
 
@@ -127,7 +169,12 @@ export class Poolcess implements IPoolcess {
       for (let i = 0; i < processCount; i++) {
         const PROC = fork(__dirname + '/worker.js', [], { silent: true });
         PROC.on('message', (data: Record<string, unknown>): void => {
-          this.taskOutputs.emit(data.id as string, data.context);
+          this.taskOutputs
+            ?.emitAsync(data.id as string, data.context)
+            .catch((error: Error): void => {
+              this.destroy();
+              throw error;
+            });
           this.taskPid.delete(data.id as string);
           this.tasks.delete(data.id as string);
           this.checkOutProcess(PROC.pid ?? -1);
@@ -138,7 +185,12 @@ export class Poolcess implements IPoolcess {
       this.processCount = 1;
       const PROC = fork(__dirname + '/worker.js', [], { silent: true });
       PROC.on('message', (data: Record<string, unknown>): void => {
-        this.taskOutputs.emit(data.id as string, data.context);
+        this.taskOutputs
+          ?.emitAsync(data.id as string, data.context)
+          .catch((error: Error): void => {
+            this.destroy();
+            throw error;
+          });
         this.taskPid.delete(data.id as string);
         this.tasks.delete(data.id as string);
         this.checkOutProcess(PROC.pid ?? -1);
@@ -169,16 +221,24 @@ export class Poolcess implements IPoolcess {
     return Promise.race<Record<string, unknown>>([
       new Promise((resolve, reject): void => {
         this.tasks.set(taskId, new Task(code, context, timeout, args));
-        this.taskOutputs.on(taskId, (res: Record<string, unknown>): void => {
-          if (res.error != undefined) {
-            if (timeoutcb != undefined) clearTimeout(timeoutcb);
-            reject(res);
-          } else {
-            if (timeoutcb != undefined) clearTimeout(timeoutcb);
-            resolve(res);
-          }
-        });
-        this.events.emit('newTask', taskId);
+        const LISTENER = this.taskOutputs?.once(
+          taskId,
+          (res: Record<string, unknown>): void => {
+            if (res.error != undefined) {
+              if (timeoutcb != undefined) clearTimeout(timeoutcb);
+              reject(res);
+            } else {
+              if (timeoutcb != undefined) clearTimeout(timeoutcb);
+              resolve(res);
+            }
+          },
+        );
+        this.events
+          ?.emitAsync('newTask', taskId)
+          .catch((error: Error): void => {
+            reject(error);
+            (LISTENER as Listener).off();
+          });
       }),
       new Promise((): void => {
         timeoutcb = setTimeout((): void => {
@@ -204,7 +264,12 @@ export class Poolcess implements IPoolcess {
           this.checkOutProcess(PROC.pid ?? -1);
         }
       }
-      this.abortEvents.emit(taskId, reason);
+      this.abortEvents
+        ?.emitAsync(taskId, reason)
+        .catch((error: Error): void => {
+          this.destroy();
+          throw error;
+        });
       this.maintainMinimumProcesses();
     } else if (this.tasks.has(taskId)) {
       this.tasks.delete(taskId);
@@ -230,7 +295,11 @@ export class Poolcess implements IPoolcess {
     this.isDestroyed = true;
     // Abort all tasks so their promises get rejected
     for (const TASKID of this.tasks.keys()) {
-      this.abortEvents.emit(TASKID, TaskAbortReason.abort);
+      this.abortEvents
+        ?.emitAsync(TASKID, TaskAbortReason.abort)
+        .catch((error: Error): void => {
+          console.log(error);
+        });
     }
     // Kill all cps
     for (const PROC of this.processes) if (!PROC.killed) PROC.kill();
@@ -238,9 +307,9 @@ export class Poolcess implements IPoolcess {
     // Clear
     this.taskPid.clear();
     this.tasks.clear();
-    this.events.removeAllListeners();
-    this.abortEvents.removeAllListeners();
-    this.taskOutputs.removeAllListeners();
+    this.events?.removeAllListeners();
+    this.abortEvents?.removeAllListeners();
+    this.taskOutputs?.removeAllListeners();
   }
 
   /**
@@ -290,7 +359,12 @@ export class Poolcess implements IPoolcess {
       for (let i = this.processes.length; i < this.processCount; i++) {
         const PROC = fork(__dirname + '/worker.js', [], { silent: true });
         PROC.on('message', (data: Record<string, unknown>): void => {
-          this.taskOutputs.emit(data.id as string, data.context);
+          this.taskOutputs
+            ?.emitAsync(data.id as string, data.context)
+            .catch((error: Error): void => {
+              this.destroy();
+              throw error;
+            });
           this.taskPid.delete(data.id as string);
           this.tasks.delete(data.id as string);
           this.checkOutProcess(PROC.pid ?? -1);

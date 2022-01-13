@@ -102,6 +102,3 @@ $ npm run test
 ```bash
 $ npm run build
 ```
-
-## Next Features
-1. Switch to [EventEmitter2](https://github.com/EventEmitter2/EventEmitter2) to improve overall performance.

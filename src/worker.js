@@ -6,22 +6,20 @@
  * Hugo Gonçalves, hfdsgoncalves@gmail.com
  *
  */
-function reviver(_key, value) {
-  if (typeof value === 'object' && value !== null) {
-    if (value.dataType === 'Map') {
-      return new Map(value.value);
-    }
-  }
-  return value;
-}
-
 process.on('message', async (data) => {
   try {
     const AsyncFunction = Object.getPrototypeOf(
       async () => void {},
     ).constructor;
     if (data.task.args != undefined) {
-      let argMap = JSON.parse(data.task.args, reviver);
+      let argMap = JSON.parse(data.task.args, (_key, value) =>{
+        if (typeof value === 'object' && value !== null) {
+          if (value.dataType === 'Map') {
+            return new Map(value.value);
+          }
+        }
+        return value;
+      });
       let args = Array.from(argMap.keys()).map((value) => {
         return value;
       });
@@ -30,11 +28,11 @@ process.on('message', async (data) => {
       });
       let scriptFn = new AsyncFunction(...args, data.task.code);
       scriptFn = scriptFn.bind(data.task.context);
-      await scriptFn(...argsContent);
+      data.task.context.return = await scriptFn(...argsContent);
     } else {
       let scriptFn = new AsyncFunction(data.task.code);
       scriptFn = scriptFn.bind(data.task.context);
-      await scriptFn();
+      data.task.context.return = await scriptFn();
     }
     process.send({ id: data.id, context: data.task.context });
   } catch (error) {

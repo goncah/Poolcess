@@ -133,4 +133,18 @@ describe('Poolcess Unit Tests', () => {
       expect((error as Error).message).toBe('Pool is destroyed.');
     }
   });
+
+  it('Test the return value', async () => {
+    const pool = new Poolcess(1);
+    let context: Record<string, unknown> = {};
+    context.return = undefined;
+    const result = await pool.execTask(
+      randomUUID(),
+      'return 100',
+      context,
+      10000,
+    );
+    pool.destroy();
+    expect(result.return).toBe(100);
+  });
 });
