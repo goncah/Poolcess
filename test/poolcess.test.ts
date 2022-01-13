@@ -147,4 +147,33 @@ describe('Poolcess Unit Tests', () => {
     pool.destroy();
     expect(result.return).toBe(100);
   });
+
+  it('Test parallel executions', async () => {
+    const pool = new Poolcess(10);
+    let context: Record<string, unknown> = {};
+    context.return = undefined;
+    let p: Promise<Record<string, unknown>>[] = [];
+    for(let i = 0; i < 10; i++){
+      p.push(pool.execTask(
+        randomUUID(),
+        'return 100',
+        context,
+        10000,
+      ));
+    }
+    let result = await Promise.all(p);
+    pool.destroy();
+    expect(result).toMatchObject([
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100},
+      {return: 100}
+    ]);
+  });
 });
